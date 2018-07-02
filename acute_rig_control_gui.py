@@ -261,7 +261,7 @@ class AcuteExperimentControl:
 
         # Block Control
         self.block_label = Label(self.master_window, text="Block Parameters")
-        self.iti_label = Label(self.master_window, text="ITI Type")
+        self.iti_label = Label(self.master_window, text="ITI Type", justify='center')
         self.itv = StringVar()
         self.itv.set("random")
         self.random_iti_button = Radiobutton(self.master_window, text="Random", variable=self.itv, value="random", command=self.set_random_iti)
@@ -276,7 +276,7 @@ class AcuteExperimentControl:
         self.n_repeats_entry = Entry(self.master_window, width=4, justify='right')
 
         self.block_label.grid(row=6, column=0, columnspan=3)
-        self.iti_label.grid(row=7, column=0, sticky='W')
+        self.iti_label.grid(row=7, column=0 )
         self.random_iti_button.grid(row=7, column=1, sticky='W')
         self.fixed_iti_button.grid(row=8, column=1, sticky='W') 
 
@@ -313,7 +313,7 @@ class AcuteExperimentControl:
         self.stimulus_path_entry.insert(0, './stimuli/')
         self.experiment_path_entry.insert(0, '~/experiments/')
 
-        self.paths_frame.grid(row=8, column=4, rowspan=4, columnspan=4)
+        self.paths_frame.grid(row=0, column=4, rowspan=4, columnspan=4)
 
         # Block Start/Stop
         self.stop_button = Button(self.master_window, text='Stop', command=self.stop_button)
@@ -337,13 +337,13 @@ class AcuteExperimentControl:
         image = Image.open("glab.png").resize(size=(256, 64), resample=Image.BICUBIC)
         self.logo = ImageTk.PhotoImage(image)
         self.logo_label = Label(image=self.logo)
-        self.logo_label.grid(row=0, column=4, columnspan=4, rowspan=4)
+        self.logo_label.grid(row=8, column=4, columnspan=4, rowspan=4)
 
         # Author
         #Label(self.master_window, text="Brad Theilman").grid(row=11, column=4 )
 
         # Setup Session button
-        Button(text='Setup Session', command=self.setup_session).grid(row=12, column=0)
+        Button(text='Setup Session', command=self.setup_session).grid(row=12, column=4)
 
     def start_button(self):
 

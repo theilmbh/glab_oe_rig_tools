@@ -3,11 +3,13 @@ from tkinter import *
 import os
 import threading
 import sys
+import socket
 import zmq
 import time
 import logging
 import glob
 import wave
+import datetime
 import numpy as np
 from PIL import Image, ImageTk
 
@@ -218,6 +220,7 @@ class AcuteExperimentControl:
         self.oe_port = 5558
 
         self.run_block_flag = None
+        self.blocknum = 0
         self.setup_gui()
 
     def setup_gui(self):
@@ -290,20 +293,33 @@ class AcuteExperimentControl:
         self.iti_range_max_entry.insert(0, str(self.inter_trial_max))
 
         # Stimulus Path
-        Frame(height=20, width=20, bd=5).grid(row=1, column=3)
-        Label(self.master_window, text="Stimuli Parameters").grid(row=0, column=4, columnspan=4)
-        self.load_stimulus_button = Button(self.master_window, text='Load Stimuli', command=self.load_stimuli)
-        self.stimulus_path_label = Label(self.master_window, text='Stimulus Directory')
-        self.stimulus_path_entry = Entry(self.master_window)
-        self.stimulus_path_label.grid(row=1, column=4)
-        self.stimulus_path_entry.grid(row=1, column=5, padx=5, columnspan=3)
+        self.paths_frame = Frame(self.master_window, bd=2)
+        Label(self.paths_frame, text="Path Parameters").grid(row=0, column=4, columnspan=4)
+        self.load_stimulus_button = Button(self.paths_frame, text='Load Stimuli', command=self.load_stimuli)
+        self.experiment_path_label = Label(self.paths_frame, text='Experiment Dir')
+        self.experiment_path_entry = Entry(self.paths_frame)
+        self.stimulus_path_label = Label(self.paths_frame, text='Stimulus Dir')
+        self.stimulus_path_entry = Entry(self.paths_frame)
+        self.session_label = Label(self.paths_frame, text='Session ID')
+        self.session_entry = Entry(self.paths_frame)
+
+        self.stimulus_path_label.grid(row=2, column=4)
+        self.stimulus_path_entry.grid(row=2, column=5, padx=5, columnspan=3)
+        self.experiment_path_label.grid(row=1, column=4)
+        self.experiment_path_entry.grid(row=1, column=5, padx=5, columnspan=3)
+        self.session_label.grid(row=3, column=4)
+        self.session_entry.grid(row=3, column=5, padx=5, columnspan=3)
+
         self.stimulus_path_entry.insert(0, './stimuli/')
+        self.experiment_path_entry.insert(0, '~/experiments/')
+
+        self.paths_frame.grid(row=8, column=4, rowspan=4, columnspan=4)
 
         # Block Start/Stop
         self.stop_button = Button(self.master_window, text='Stop', command=self.stop_button)
         self.start_button = Button(self.master_window, text='Start', command=self.start_button)
-        self.stop_button.grid(row= 11, column=6, sticky='E')
-        self.start_button.grid(row=11, column=7, sticky='E', padx=5)
+        self.stop_button.grid(row= 12, column=6, sticky='E')
+        self.start_button.grid(row=12, column=7, sticky='E', padx=5)
 
         # Block Status
         self.block_status_frame = Frame(self.master_window, bd=2, relief='ridge')
@@ -315,18 +331,19 @@ class AcuteExperimentControl:
         self.block_min_label.grid(row=3, column=4, columnspan=1)
         self.block_max_label.grid(row=3, column=6, columnspan=1)
 
-        self.block_status_frame.grid(row=2, column=4, columnspan=4, rowspan=4, padx=5)
+        self.block_status_frame.grid(row=4, column=4, columnspan=4, rowspan=4, padx=5)
 
         # Logo
         image = Image.open("glab.png").resize(size=(256, 64), resample=Image.BICUBIC)
         self.logo = ImageTk.PhotoImage(image)
         self.logo_label = Label(image=self.logo)
-        self.logo_label.grid(row=6, column=4, columnspan=4, rowspan=4)
+        self.logo_label.grid(row=0, column=4, columnspan=4, rowspan=4)
 
         # Author
         #Label(self.master_window, text="Brad Theilman").grid(row=11, column=4 )
 
-
+        # Setup Session button
+        Button(text='Setup Session', command=self.setup_session).grid(row=12, column=0)
 
     def start_button(self):
 
@@ -399,6 +416,8 @@ class AcuteExperimentControl:
         self.block_max_label.config(text="Block Max: %.1f (s)" % block_max)
 
         # run the block
+        self.blocknum += 1
+        self.setup_block_name()
         self.block_thread = threading.Thread(target=self.block_thread_task)
         self.run_block_flag = threading.Event()
         self.run_block_flag.set()
@@ -454,6 +473,31 @@ class AcuteExperimentControl:
                 max_dur = min_dur
         return (min_dur, max_dur)
                
+    def setup_block_name(self):
+
+        #Format: Date-Time-Bird-Blocknum-AP-ML-Z
+        self.block_name = datetime.datetime.now().strftime('%Y%m%d%H%M') + '-' + self.bird + '-' + 'block-{}-'.format(self.blocknum) + \
+                'AP-%.0f-' % self.AP + 'ML-%.0f-' % self.ML + 'Z-%.0f' % self.Z
+                
+        self.block_path = os.path.join(self.blocks_path, self.block_name)
+        os.makedirs(self.block_path, exist_ok=False)
+        self.save_block_parameters(self.block_path)
+
+    def save_block_parameters(self, path):
+        pass
+
+    def setup_session(self):
+        self.sessionID = datetime.datetime.now().strftime('%Y%m%d') + '-' +socket.gethostname()
+        self.session_path=os.path.join(self.experiment_path_entry.get(), self.sessionID)
+        self.bird_path = os.path.join(self.session_path, self.bird)
+        #self.stimuli_path = os.path.join(self.bird_path, 'stimuli')
+        self.blocks_path = os.path.join(self.bird_path, 'blocks')
+        #os.makedirs(self.stimuli_path, exist_ok=True)
+        os.makedirs(self.blocks_path, exist_ok=True)
+
+        #self.stimulus_path_entry.delete(0, END)
+        #self.stimulus_path_entry.insert(0, self.stimuli_path)
+        self.session_entry.insert(0, self.sessionID)
 
     def run(self):
         self.master_window.mainloop()

@@ -12,6 +12,8 @@ import wave
 import datetime
 import numpy as np
 from PIL import Image, ImageTk
+from paramiko import SSHClient
+from scp import SCPClient
 
 
 def parse_command(cmd_str):
@@ -310,8 +312,8 @@ class AcuteExperimentControl:
         self.session_label.grid(row=3, column=4)
         self.session_entry.grid(row=3, column=5, padx=5, columnspan=3)
 
-        self.stimulus_path_entry.insert(0, './stimuli/')
-        self.experiment_path_entry.insert(0, '~/experiments/')
+        self.stimulus_path_entry.insert(0, os.path.expanduser('~/stimuli'))
+        self.experiment_path_entry.insert(0, os.path.expanduser('~/experiments/'))
 
         self.paths_frame.grid(row=0, column=4, rowspan=4, columnspan=4)
 
@@ -415,6 +417,10 @@ class AcuteExperimentControl:
         self.block_min_label.config(text="Block Min: %.1f (s)" % block_min)
         self.block_max_label.config(text="Block Max: %.1f (s)" % block_max)
 
+        # Copy Stimuli
+        self.copy_stimuli()
+        print('Copied stimuli.')
+
         # run the block
         self.blocknum += 1
         self.setup_block_name()
@@ -439,10 +445,12 @@ class AcuteExperimentControl:
             else:
                 iti = self.inter_trial_fixed
             stimulus_file = self.stimuli[stim_num]
+            _, stimulus_name = os.path.split(stimulus_file)
+            pi_stimulus_path = os.path.join('/home/pi/stimuli/', stimulus_name)
             print('Trial: {} Stimulus: {}'.format(trial_num, stimulus_file))
             # set stimulus status label
-            self.stimulus_status_label.config(text="Stimulus: {}   {} of {}".format(stimulus_file, trial_num+1, len(stim_order)))
-            self.rpi.start_trial(stimulus_file, trial_num)
+            self.stimulus_status_label.config(text="Stimulus: {}   {} of {}".format(stimulus_name, trial_num+1, len(stim_order)))
+            self.rpi.start_trial(pi_stimulus_path, trial_num)
             print('ITI: {} seconds'.format(iti))
             time.sleep(iti)
 
@@ -498,6 +506,15 @@ class AcuteExperimentControl:
         #self.stimulus_path_entry.delete(0, END)
         #self.stimulus_path_entry.insert(0, self.stimuli_path)
         self.session_entry.insert(0, self.sessionID)
+
+    def copy_stimuli(self):
+        # Copies stimuli over to raspi via ssh
+        ssh = SSHClient()
+        ssh.load_system_host_keys()
+        ssh.connect('192.168.1.5', username='pi')
+        with SCPClient(ssh.get_transport()) as scp:
+            for stimulus in self.stimuli:
+                scp.put(stimulus, remote_path='/home/pi/stimuli')
 
     def run(self):
         self.master_window.mainloop()

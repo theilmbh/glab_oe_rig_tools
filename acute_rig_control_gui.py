@@ -148,10 +148,10 @@ class OpenEphysEvents:
                       'Acquiring': 'isAcquiring'}
 
         status_queried = self.send_command(query_dict[status_query])
-        return True if status_queried == '1' else False if status_queried == '0' else None
+        return True if status_queried == b'1' else False if status_queried == b'0' else None
 
     def send_command(self, cmd):
-        self.socket.send(cmd)
+        self.socket.send_string(cmd)
         self.last_cmd = cmd
         self.last_rcv = self.socket.recv()
         return self.last_rcv
@@ -407,6 +407,8 @@ class AcuteExperimentControl:
         self.rpi.connect()
 
         # Connect to OpenEphys
+        self.openephys = OpenEphysEvents()
+        self.openephys.connect()
 
         # Load Stimuli
         self.stimuli=['./test.wav', './test.wav', './test.wav']
@@ -421,12 +423,18 @@ class AcuteExperimentControl:
         self.copy_stimuli()
         print('Copied stimuli.')
 
-        # run the block
+        # prepare the block
         self.blocknum += 1
         self.setup_block_name()
         self.block_thread = threading.Thread(target=self.block_thread_task)
         self.run_block_flag = threading.Event()
         self.run_block_flag.set()
+
+        # Start Recording and Run the block
+        self.openephys.start_acq()
+        rec_params = {'CreateNewDir': '0', 'RecDir': self.block_path, 'PrependText': None, 'AppendText': None}
+        self.openephys.start_rec(rec_params)
+        time.sleep(5.0)
         self.block_thread.start()
 
     def block_thread_task(self):
@@ -455,8 +463,10 @@ class AcuteExperimentControl:
             time.sleep(iti)
 
         # clean up end of block
+        self.openephys.close()
         self.unlock_params()
         self.stimulus_status_label.config(text="Block Finished")
+
 
     def load_stimuli(self, path):
         wavfs = glob.glob(os.path.join(path, '*.wav'))

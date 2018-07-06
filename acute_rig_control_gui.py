@@ -15,6 +15,12 @@ from PIL import Image, ImageTk
 from paramiko import SSHClient
 from scp import SCPClient
 
+#################################
+## ACUTE RIG CONTROL GUI!      ##
+## Brad Theilman 2018          ##
+## With code from Zeke Arneodo ##
+#################################
+
 
 def parse_command(cmd_str):
     """
@@ -208,7 +214,7 @@ class AcuteExperimentControl:
         self.probe = 'A1x16'
 
         # Stimulu information
-        self.stim_dir = './stimuli/'
+        self.stim_dir = os.path.expanduser('~/stimuli/')
 
         # Trial information
         self.inter_trial_type = 'random'
@@ -515,6 +521,7 @@ class AcuteExperimentControl:
 
         #self.stimulus_path_entry.delete(0, END)
         #self.stimulus_path_entry.insert(0, self.stimuli_path)
+        self.session_entry.delete(0, END)
         self.session_entry.insert(0, self.sessionID)
 
     def copy_stimuli(self):

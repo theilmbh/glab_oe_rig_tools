@@ -229,6 +229,7 @@ class AcuteExperimentControl:
 
         self.run_block_flag = None
         self.blocknum = 0
+        self.search_or_block = "block"
         self.setup_gui()
 
     def setup_gui(self):
@@ -274,6 +275,10 @@ class AcuteExperimentControl:
         self.itv.set("random")
         self.random_iti_button = Radiobutton(self.master_window, text="Random", variable=self.itv, value="random", command=self.set_random_iti)
         self.fixed_iti_button = Radiobutton(self.master_window, text="Fixed", variable=self.itv, value="fixed", command=self.set_fixed_iti)
+        self.sob = StringVar()
+        self.sob.set("block")
+        self.search_button = Radiobutton(self.master_window, text="Search", variable=self.sob, value="search", command=self.set_search)
+        self.block_button = Radiobutton(self.master_window, text="Block", variable=self.sob, value="block", command=self.set_block)
 
         self.iti_range_label = Label(self.master_window, text="ITI Min (s)")
         self.iti_range_min_entry = Entry(self.master_window, width=4, justify='right')
@@ -295,6 +300,8 @@ class AcuteExperimentControl:
 
         self.n_repeats_label.grid(row=11, column=0)
         self.n_repeats_entry.grid(row=11, column=1, sticky='E')
+        self.search_button.grid(row=12, column=0)
+        self.block_button.grid(row=12, column=1)
 
         self.n_repeats_entry.insert(0, str(self.n_repeats))
         self.iti_range_min_entry.insert(0, str(self.inter_trial_min))
@@ -342,7 +349,7 @@ class AcuteExperimentControl:
         self.block_status_frame.grid(row=4, column=4, columnspan=4, rowspan=4, padx=5)
 
         # Logo
-        image = Image.open("glab.png").resize(size=(256, 64), resample=Image.BICUBIC)
+        image = Image.open("/home/gentnerlab/code/glab_oe_rig_tools/glab.png").resize(size=(256, 64), resample=Image.BICUBIC)
         self.logo = ImageTk.PhotoImage(image)
         self.logo_label = Label(image=self.logo)
         self.logo_label.grid(row=8, column=4, columnspan=4, rowspan=4)
@@ -407,6 +414,12 @@ class AcuteExperimentControl:
         self.iti_range_label.config(text='ITI Fixed (s)')
         self.iti_range_max_entry.config(state=DISABLED)
 
+    def set_search(self):
+        self.search_or_block = "search"
+
+    def set_block(self):
+        self.search_or_block = "block"
+
     def start_block(self):
         # Connect to Raspberry pi
         self.rpi = RigStateMachineConnection()
@@ -431,8 +444,11 @@ class AcuteExperimentControl:
 
         # prepare the block
         self.blocknum += 1
-        self.setup_block_name()
-        self.block_thread = threading.Thread(target=self.block_thread_task)
+        self.setup_block_name(self.search_or_block)
+        if self.search_or_block == "block":
+            self.block_thread = threading.Thread(target=self.block_thread_task)
+        else:
+            self.block_thread = threading.Thread(target=self.search_thread_task)
         self.run_block_flag = threading.Event()
         self.run_block_flag.set()
 
@@ -473,6 +489,31 @@ class AcuteExperimentControl:
         self.unlock_params()
         self.stimulus_status_label.config(text="Block Finished")
 
+    def search_thread_task(self):
+        n_stims = len(self.stimuli)
+        stimulus_file = self.stimuli[0]
+        while self.run_block_flag.is_set():
+         # is repeat stimulus set?  if not, choose a new stimulus to play
+            if not repeat_stim:
+                stimulus_file = self.stimuli[np.random.randint(n_stims)]
+
+            if self.inter_trial_type == 'random':
+                iti = (self.inter_trial_max - self.inter_trial_min)*np.random.random() + self.inter_trial_min
+            else:
+                iti = self.inter_trial_fixed
+            _, stimulus_name = os.path.split(stimulus_file)
+            pi_stimulus_path = os.path.join('/home/pi/stimuli/', stimulus_name)
+            print('Search Trial: {} Stimulus: {}'.format(trial_num, stimulus_file))
+            # set stimulus status label
+            self.stimulus_status_label.config(text="Stimulus: {}   {} of {}".format(stimulus_name, trial_num+1, len(stim_order)))
+            self.rpi.start_trial(pi_stimulus_path, trial_num)
+            print('ITI: {} seconds'.format(iti))
+            time.sleep(iti)
+
+        # clean up end of block
+        self.openephys.close()
+        self.unlock_params()
+        self.stimulus_status_label.config(text="Search Finished")
 
     def load_stimuli(self, path):
         wavfs = glob.glob(os.path.join(path, '*.wav'))
@@ -497,10 +538,10 @@ class AcuteExperimentControl:
                 max_dur = min_dur
         return (min_dur, max_dur)
                
-    def setup_block_name(self):
+    def setup_block_name(self, search_or_block):
 
         #Format: Date-Time-Bird-Blocknum-AP-ML-Z
-        self.block_name = datetime.datetime.now().strftime('%Y%m%d%H%M') + '-' + self.bird + '-' + 'block-{}-'.format(self.blocknum) + \
+        self.block_name = datetime.datetime.now().strftime('%Y%m%d%H%M') + '-' + self.bird + '-' + '{}-{}-'.format(search_or_block, self.blocknum) + \
                 'AP-%.0f-' % self.AP + 'ML-%.0f-' % self.ML + 'Z-%.0f' % self.Z
                 
         self.block_path = os.path.join(self.blocks_path, self.block_name)

@@ -3,13 +3,23 @@ from tkinter import *
 import os
 import threading
 import sys
+import socket
 import zmq
 import time
 import logging
 import glob
 import wave
+import datetime
 import numpy as np
 from PIL import Image, ImageTk
+from paramiko import SSHClient
+from scp import SCPClient
+
+#################################
+## ACUTE RIG CONTROL GUI!      ##
+## Brad Theilman 2018          ##
+## With code from Zeke Arneodo ##
+#################################
 
 
 def parse_command(cmd_str):
@@ -144,10 +154,10 @@ class OpenEphysEvents:
                       'Acquiring': 'isAcquiring'}
 
         status_queried = self.send_command(query_dict[status_query])
-        return True if status_queried == '1' else False if status_queried == '0' else None
+        return True if status_queried == b'1' else False if status_queried == b'0' else None
 
     def send_command(self, cmd):
-        self.socket.send(cmd)
+        self.socket.send_string(cmd)
         self.last_cmd = cmd
         self.last_rcv = self.socket.recv()
         return self.last_rcv
@@ -204,7 +214,7 @@ class AcuteExperimentControl:
         self.probe = 'A1x16'
 
         # Stimulu information
-        self.stim_dir = './stimuli/'
+        self.stim_dir = os.path.expanduser('~/stimuli/')
 
         # Trial information
         self.inter_trial_type = 'random'
@@ -218,6 +228,9 @@ class AcuteExperimentControl:
         self.oe_port = 5558
 
         self.run_block_flag = None
+        self.blocknum = 0
+        self.search_or_block = "block"
+        self.repeat_stim = False
         self.setup_gui()
 
     def setup_gui(self):
@@ -258,11 +271,15 @@ class AcuteExperimentControl:
 
         # Block Control
         self.block_label = Label(self.master_window, text="Block Parameters")
-        self.iti_label = Label(self.master_window, text="ITI Type")
+        self.iti_label = Label(self.master_window, text="ITI Type", justify='center')
         self.itv = StringVar()
         self.itv.set("random")
         self.random_iti_button = Radiobutton(self.master_window, text="Random", variable=self.itv, value="random", command=self.set_random_iti)
         self.fixed_iti_button = Radiobutton(self.master_window, text="Fixed", variable=self.itv, value="fixed", command=self.set_fixed_iti)
+        self.sob = StringVar()
+        self.sob.set("block")
+        self.search_button = Radiobutton(self.master_window, text="Search", variable=self.sob, value="search", command=self.set_search)
+        self.block_button = Radiobutton(self.master_window, text="Block", variable=self.sob, value="block", command=self.set_block)
 
         self.iti_range_label = Label(self.master_window, text="ITI Min (s)")
         self.iti_range_min_entry = Entry(self.master_window, width=4, justify='right')
@@ -273,7 +290,7 @@ class AcuteExperimentControl:
         self.n_repeats_entry = Entry(self.master_window, width=4, justify='right')
 
         self.block_label.grid(row=6, column=0, columnspan=3)
-        self.iti_label.grid(row=7, column=0, sticky='W')
+        self.iti_label.grid(row=7, column=0 )
         self.random_iti_button.grid(row=7, column=1, sticky='W')
         self.fixed_iti_button.grid(row=8, column=1, sticky='W') 
 
@@ -284,26 +301,43 @@ class AcuteExperimentControl:
 
         self.n_repeats_label.grid(row=11, column=0)
         self.n_repeats_entry.grid(row=11, column=1, sticky='E')
+        self.search_button.grid(row=12, column=0)
+        self.block_button.grid(row=12, column=1)
 
         self.n_repeats_entry.insert(0, str(self.n_repeats))
         self.iti_range_min_entry.insert(0, str(self.inter_trial_min))
         self.iti_range_max_entry.insert(0, str(self.inter_trial_max))
 
         # Stimulus Path
-        Frame(height=20, width=20, bd=5).grid(row=1, column=3)
-        Label(self.master_window, text="Stimuli Parameters").grid(row=0, column=4, columnspan=4)
-        self.load_stimulus_button = Button(self.master_window, text='Load Stimuli', command=self.load_stimuli)
-        self.stimulus_path_label = Label(self.master_window, text='Stimulus Directory')
-        self.stimulus_path_entry = Entry(self.master_window)
-        self.stimulus_path_label.grid(row=1, column=4)
-        self.stimulus_path_entry.grid(row=1, column=5, padx=5, columnspan=3)
-        self.stimulus_path_entry.insert(0, './stimuli/')
+        self.paths_frame = Frame(self.master_window, bd=2)
+        Label(self.paths_frame, text="Path Parameters").grid(row=0, column=4, columnspan=4)
+        self.load_stimulus_button = Button(self.paths_frame, text='Load Stimuli', command=self.load_stimuli)
+        self.experiment_path_label = Label(self.paths_frame, text='Experiment Dir')
+        self.experiment_path_entry = Entry(self.paths_frame)
+        self.stimulus_path_label = Label(self.paths_frame, text='Stimulus Dir')
+        self.stimulus_path_entry = Entry(self.paths_frame)
+        self.session_label = Label(self.paths_frame, text='Session ID')
+        self.session_entry = Entry(self.paths_frame)
+
+        self.stimulus_path_label.grid(row=2, column=4)
+        self.stimulus_path_entry.grid(row=2, column=5, padx=5, columnspan=3)
+        self.experiment_path_label.grid(row=1, column=4)
+        self.experiment_path_entry.grid(row=1, column=5, padx=5, columnspan=3)
+        self.session_label.grid(row=3, column=4)
+        self.session_entry.grid(row=3, column=5, padx=5, columnspan=3)
+
+        self.stimulus_path_entry.insert(0, os.path.expanduser('~/stimuli'))
+        self.experiment_path_entry.insert(0, os.path.expanduser('~/experiments/'))
+
+        self.paths_frame.grid(row=0, column=4, rowspan=4, columnspan=4)
 
         # Block Start/Stop
-        self.stop_button = Button(self.master_window, text='Stop', command=self.stop_button)
-        self.start_button = Button(self.master_window, text='Start', command=self.start_button)
-        self.stop_button.grid(row= 11, column=6, sticky='E')
-        self.start_button.grid(row=11, column=7, sticky='E', padx=5)
+        self.stop_button = Button(self.master_window, text='Stop', command=self.stop_button_cmd)
+        self.start_button = Button(self.master_window, text='Start', command=self.start_button_cmd)
+        self.repeat_stimulus_button = Button(self.master_window, text='Repeat Stimulus', command=self.flip_repeat_stimulus)
+        self.stop_button.grid(row= 13, column=6, sticky='E')
+        self.start_button.grid(row=13, column=7, sticky='E', padx=5)
+        self.repeat_stimulus_button.grid(row=13, column=0, columnspan=2)
 
         # Block Status
         self.block_status_frame = Frame(self.master_window, bd=2, relief='ridge')
@@ -315,20 +349,21 @@ class AcuteExperimentControl:
         self.block_min_label.grid(row=3, column=4, columnspan=1)
         self.block_max_label.grid(row=3, column=6, columnspan=1)
 
-        self.block_status_frame.grid(row=2, column=4, columnspan=4, rowspan=4, padx=5)
+        self.block_status_frame.grid(row=4, column=4, columnspan=4, rowspan=4, padx=5)
 
         # Logo
-        image = Image.open("glab.png").resize(size=(256, 64), resample=Image.BICUBIC)
+        image = Image.open("/home/gentnerlab/code/glab_oe_rig_tools/glab.png").resize(size=(256, 64), resample=Image.BICUBIC)
         self.logo = ImageTk.PhotoImage(image)
         self.logo_label = Label(image=self.logo)
-        self.logo_label.grid(row=6, column=4, columnspan=4, rowspan=4)
+        self.logo_label.grid(row=8, column=4, columnspan=4, rowspan=4)
 
         # Author
         #Label(self.master_window, text="Brad Theilman").grid(row=11, column=4 )
 
+        # Setup Session button
+        Button(text='Setup Session', command=self.setup_session).grid(row=13, column=4)
 
-
-    def start_button(self):
+    def start_button_cmd(self):
 
         self.lock_params()
         # Record all the current values
@@ -347,10 +382,18 @@ class AcuteExperimentControl:
         print('Bird: {} Probe: {} AP: {} ML: {} Z:{}'.format(self.bird, self.probe, self.AP, self.ML, self.Z))
         self.start_block()
 
-    def stop_button(self):
+    def stop_button_cmd(self):
         if self.run_block_flag:
             self.run_block_flag.clear()
         self.unlock_params()
+    
+    def flip_repeat_stimulus(self):
+        self.repeat_stim = not self.repeat_stim
+        if self.repeat_stim:
+            self.repeat_stimulus_button.config(text="Random Stim")
+        else:
+            self.repeat_stimulus_button.config(text="Repeat Stim")
+
 
     def lock_params(self):
         self.bird_entry.config(state=DISABLED)
@@ -382,12 +425,20 @@ class AcuteExperimentControl:
         self.iti_range_label.config(text='ITI Fixed (s)')
         self.iti_range_max_entry.config(state=DISABLED)
 
+    def set_search(self):
+        self.search_or_block = "search"
+
+    def set_block(self):
+        self.search_or_block = "block"
+
     def start_block(self):
         # Connect to Raspberry pi
         self.rpi = RigStateMachineConnection()
         self.rpi.connect()
 
         # Connect to OpenEphys
+        self.openephys = OpenEphysEvents()
+        self.openephys.connect()
 
         # Load Stimuli
         self.stimuli=['./test.wav', './test.wav', './test.wav']
@@ -398,10 +449,25 @@ class AcuteExperimentControl:
         self.block_min_label.config(text="Block Min: %.1f (s)" % block_min)
         self.block_max_label.config(text="Block Max: %.1f (s)" % block_max)
 
-        # run the block
-        self.block_thread = threading.Thread(target=self.block_thread_task)
+        # Copy Stimuli
+        self.copy_stimuli()
+        print('Copied stimuli.')
+
+        # prepare the block
+        self.blocknum += 1
+        self.setup_block_name(self.search_or_block)
+        if self.search_or_block == "block":
+            self.block_thread = threading.Thread(target=self.block_thread_task)
+        else:
+            self.block_thread = threading.Thread(target=self.search_thread_task)
         self.run_block_flag = threading.Event()
         self.run_block_flag.set()
+
+        # Start Recording and Run the block
+        self.openephys.start_acq()
+        rec_params = {'CreateNewDir': '0', 'RecDir': self.block_path, 'PrependText': None, 'AppendText': None}
+        self.openephys.start_rec(rec_params)
+        time.sleep(5.0)
         self.block_thread.start()
 
     def block_thread_task(self):
@@ -420,16 +486,47 @@ class AcuteExperimentControl:
             else:
                 iti = self.inter_trial_fixed
             stimulus_file = self.stimuli[stim_num]
+            _, stimulus_name = os.path.split(stimulus_file)
+            pi_stimulus_path = os.path.join('/home/pi/stimuli/', stimulus_name)
             print('Trial: {} Stimulus: {}'.format(trial_num, stimulus_file))
             # set stimulus status label
-            self.stimulus_status_label.config(text="Stimulus: {}   {} of {}".format(stimulus_file, trial_num+1, len(stim_order)))
-            self.rpi.start_trial(stimulus_file, trial_num)
+            self.stimulus_status_label.config(text="Stimulus: {}   {} of {}".format(stimulus_name, trial_num+1, len(stim_order)))
+            self.rpi.start_trial(pi_stimulus_path, trial_num)
             print('ITI: {} seconds'.format(iti))
             time.sleep(iti)
 
         # clean up end of block
+        self.openephys.close()
         self.unlock_params()
         self.stimulus_status_label.config(text="Block Finished")
+
+    def search_thread_task(self):
+        n_stims = len(self.stimuli)
+        stimulus_file = self.stimuli[0]
+        trial_num = 0
+        while self.run_block_flag.is_set():
+            trial_num += 1
+         # is repeat stimulus set?  if not, choose a new stimulus to play
+            if not self.repeat_stim:
+                stimulus_file = self.stimuli[np.random.randint(n_stims)]
+
+            if self.inter_trial_type == 'random':
+                iti = (self.inter_trial_max - self.inter_trial_min)*np.random.random() + self.inter_trial_min
+            else:
+                iti = self.inter_trial_fixed
+            _, stimulus_name = os.path.split(stimulus_file)
+            pi_stimulus_path = os.path.join('/home/pi/stimuli/', stimulus_name)
+            print('Search Trial: {} Stimulus: {}'.format(trial_num, stimulus_file))
+            # set stimulus status label
+            self.stimulus_status_label.config(text="Stimulus: {}".format(stimulus_name))
+            self.rpi.start_trial(pi_stimulus_path, trial_num)
+            print('ITI: {} seconds'.format(iti))
+            time.sleep(iti)
+
+        # clean up end of block
+        self.openephys.close()
+        self.unlock_params()
+        self.stimulus_status_label.config(text="Search Finished")
 
     def load_stimuli(self, path):
         wavfs = glob.glob(os.path.join(path, '*.wav'))
@@ -454,6 +551,41 @@ class AcuteExperimentControl:
                 max_dur = min_dur
         return (min_dur, max_dur)
                
+    def setup_block_name(self, search_or_block):
+
+        #Format: Date-Time-Bird-Blocknum-AP-ML-Z
+        self.block_name = datetime.datetime.now().strftime('%Y%m%d%H%M') + '-' + self.bird + '-' + '{}-{}-'.format(search_or_block, self.blocknum) + \
+                'AP-%.0f-' % self.AP + 'ML-%.0f-' % self.ML + 'Z-%.0f' % self.Z
+                
+        self.block_path = os.path.join(self.blocks_path, self.block_name)
+        os.makedirs(self.block_path, exist_ok=False)
+        self.save_block_parameters(self.block_path)
+
+    def save_block_parameters(self, path):
+        pass
+
+    def setup_session(self):
+        self.sessionID = datetime.datetime.now().strftime('%Y%m%d') + '-' +socket.gethostname()
+        self.session_path=os.path.join(self.experiment_path_entry.get(), self.sessionID)
+        self.bird_path = os.path.join(self.session_path, self.bird)
+        #self.stimuli_path = os.path.join(self.bird_path, 'stimuli')
+        self.blocks_path = os.path.join(self.bird_path, 'blocks')
+        #os.makedirs(self.stimuli_path, exist_ok=True)
+        os.makedirs(self.blocks_path, exist_ok=True)
+
+        #self.stimulus_path_entry.delete(0, END)
+        #self.stimulus_path_entry.insert(0, self.stimuli_path)
+        self.session_entry.delete(0, END)
+        self.session_entry.insert(0, self.sessionID)
+
+    def copy_stimuli(self):
+        # Copies stimuli over to raspi via ssh
+        ssh = SSHClient()
+        ssh.load_system_host_keys()
+        ssh.connect('192.168.1.5', username='pi')
+        with SCPClient(ssh.get_transport()) as scp:
+            for stimulus in self.stimuli:
+                scp.put(stimulus, remote_path='/home/pi/stimuli')
 
     def run(self):
         self.master_window.mainloop()

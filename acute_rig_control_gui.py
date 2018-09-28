@@ -230,6 +230,7 @@ class AcuteExperimentControl:
         self.run_block_flag = None
         self.blocknum = 0
         self.search_or_block = "block"
+        self.repeat_stim = False
         self.setup_gui()
 
     def setup_gui(self):
@@ -331,10 +332,12 @@ class AcuteExperimentControl:
         self.paths_frame.grid(row=0, column=4, rowspan=4, columnspan=4)
 
         # Block Start/Stop
-        self.stop_button = Button(self.master_window, text='Stop', command=self.stop_button)
-        self.start_button = Button(self.master_window, text='Start', command=self.start_button)
-        self.stop_button.grid(row= 12, column=6, sticky='E')
-        self.start_button.grid(row=12, column=7, sticky='E', padx=5)
+        self.stop_button = Button(self.master_window, text='Stop', command=self.stop_button_cmd)
+        self.start_button = Button(self.master_window, text='Start', command=self.start_button_cmd)
+        self.repeat_stimulus_button = Button(self.master_window, text='Repeat Stimulus', command=self.flip_repeat_stimulus)
+        self.stop_button.grid(row= 13, column=6, sticky='E')
+        self.start_button.grid(row=13, column=7, sticky='E', padx=5)
+        self.repeat_stimulus_button.grid(row=13, column=0, columnspan=2)
 
         # Block Status
         self.block_status_frame = Frame(self.master_window, bd=2, relief='ridge')
@@ -358,9 +361,9 @@ class AcuteExperimentControl:
         #Label(self.master_window, text="Brad Theilman").grid(row=11, column=4 )
 
         # Setup Session button
-        Button(text='Setup Session', command=self.setup_session).grid(row=12, column=4)
+        Button(text='Setup Session', command=self.setup_session).grid(row=13, column=4)
 
-    def start_button(self):
+    def start_button_cmd(self):
 
         self.lock_params()
         # Record all the current values
@@ -379,10 +382,18 @@ class AcuteExperimentControl:
         print('Bird: {} Probe: {} AP: {} ML: {} Z:{}'.format(self.bird, self.probe, self.AP, self.ML, self.Z))
         self.start_block()
 
-    def stop_button(self):
+    def stop_button_cmd(self):
         if self.run_block_flag:
             self.run_block_flag.clear()
         self.unlock_params()
+    
+    def flip_repeat_stimulus(self):
+        self.repeat_stim = not self.repeat_stim
+        if self.repeat_stim:
+            self.repeat_stimulus_button.config(text="Random Stim")
+        else:
+            self.repeat_stimulus_button.config(text="Repeat Stim")
+
 
     def lock_params(self):
         self.bird_entry.config(state=DISABLED)
@@ -492,9 +503,11 @@ class AcuteExperimentControl:
     def search_thread_task(self):
         n_stims = len(self.stimuli)
         stimulus_file = self.stimuli[0]
+        trial_num = 0
         while self.run_block_flag.is_set():
+            trial_num += 1
          # is repeat stimulus set?  if not, choose a new stimulus to play
-            if not repeat_stim:
+            if not self.repeat_stim:
                 stimulus_file = self.stimuli[np.random.randint(n_stims)]
 
             if self.inter_trial_type == 'random':
@@ -505,7 +518,7 @@ class AcuteExperimentControl:
             pi_stimulus_path = os.path.join('/home/pi/stimuli/', stimulus_name)
             print('Search Trial: {} Stimulus: {}'.format(trial_num, stimulus_file))
             # set stimulus status label
-            self.stimulus_status_label.config(text="Stimulus: {}   {} of {}".format(stimulus_name, trial_num+1, len(stim_order)))
+            self.stimulus_status_label.config(text="Stimulus: {}".format(stimulus_name))
             self.rpi.start_trial(pi_stimulus_path, trial_num)
             print('ITI: {} seconds'.format(iti))
             time.sleep(iti)

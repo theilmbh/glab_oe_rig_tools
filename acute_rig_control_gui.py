@@ -38,6 +38,7 @@ def parse_command(cmd_str):
 
 
 class OpenEphysEvents:
+
     def __init__(self, port='5556', ip='127.0.0.1'):
         self.ip = ip
         self.port = port
@@ -112,7 +113,7 @@ class OpenEphysEvents:
             print('Did not start recording')
         return ok_started
 
-    def stop_rec(self, ):
+    def stop_rec(self):
         if self.query_status('Recording'):
             self.send_command('StopRecord')
             if not self.query_status('Recording'):
@@ -169,6 +170,7 @@ class OpenEphysEvents:
         self.context.destroy()
 
 class RigStateMachineConnection:
+
     def __init__(self, port='5558', ip='192.168.1.5', timeout_s=90.):
         self.ip = ip
         self.port = port
@@ -236,7 +238,6 @@ class AcuteExperimentControl:
         self.setup_gui()
 
     def setup_gui(self):
-
         # Bird / Probe / Location
         self.p_label    = Label(self.master_window, text="Physical Parameters")
         self.bird_label = Label(self.master_window, text="Bird")
@@ -366,7 +367,6 @@ class AcuteExperimentControl:
         Button(text='Setup Session', command=self.setup_session).grid(row=13, column=4)
 
     def start_button_cmd(self):
-
         self.lock_params()
         # Record all the current values
         self.bird = self.bird_entry.get()
@@ -476,7 +476,6 @@ class AcuteExperimentControl:
         self.block_thread.start()
 
     def block_thread_task(self):
-        #print(self.stimuli)
         n_stims = len(self.stimuli)
         stim_order = np.tile(np.arange(n_stims), self.n_repeats)
         np.random.shuffle(stim_order)
@@ -561,7 +560,6 @@ class AcuteExperimentControl:
             self.stimuli = self.sined_stim_names 
 
     def compute_block_length(self):
-
         if self.stimuli:
             durs = []
             for stim in self.stimuli:
@@ -580,7 +578,6 @@ class AcuteExperimentControl:
         return (min_dur, max_dur)
                
     def setup_block_name(self, search_or_block):
-
         #Format: Date-Time-Bird-Blocknum-AP-ML-Z
         self.block_name = datetime.datetime.now().strftime('%Y%m%d%H%M') + '-' + self.bird + '-' + '{}-{}-'.format(search_or_block, self.blocknum) + \
                 'AP-%.0f-' % self.AP + 'ML-%.0f-' % self.ML + 'Z-%.0f' % self.Z

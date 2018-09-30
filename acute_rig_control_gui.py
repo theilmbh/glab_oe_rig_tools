@@ -11,6 +11,7 @@ import glob
 import wave
 import datetime
 import numpy as np
+import scipy.io.wavfile as wavfile
 from PIL import Image, ImageTk
 from paramiko import SSHClient
 from scp import SCPClient
@@ -168,7 +169,7 @@ class OpenEphysEvents:
         self.context.destroy()
 
 class RigStateMachineConnection:
-    def __init__(self, port='5558', ip='192.168.1.5', timeout_s=60.):
+    def __init__(self, port='5558', ip='192.168.1.5', timeout_s=90.):
         self.ip = ip
         self.port = port
         self.socket = None
@@ -182,6 +183,7 @@ class RigStateMachineConnection:
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
         self.socket.RCVTIMEO = self.timeout
+        self.socket.SNDTIMEO = self.timeout
         self.socket.connect(url)
 
     def send_command(self, cmd):
@@ -352,7 +354,7 @@ class AcuteExperimentControl:
         self.block_status_frame.grid(row=4, column=4, columnspan=4, rowspan=4, padx=5)
 
         # Logo
-        image = Image.open("/home/gentnerlab/code/glab_oe_rig_tools/glab.png").resize(size=(256, 64), resample=Image.BICUBIC)
+        image = Image.open("glab.png").resize(size=(256, 64), resample=Image.BICUBIC)
         self.logo = ImageTk.PhotoImage(image)
         self.logo_label = Label(image=self.logo)
         self.logo_label.grid(row=8, column=4, columnspan=4, rowspan=4)
@@ -444,6 +446,9 @@ class AcuteExperimentControl:
         self.stimuli=['./test.wav', './test.wav', './test.wav']
         self.load_stimuli(self.stim_dir)
 
+        # Add Sines to Stimuli
+        self.add_sines_to_stimuli()
+
         # Compute Length
         (block_min, block_max) = self.compute_block_length()
         self.block_min_label.config(text="Block Min: %.1f (s)" % block_min)
@@ -491,6 +496,9 @@ class AcuteExperimentControl:
             print('Trial: {} Stimulus: {}'.format(trial_num, stimulus_file))
             # set stimulus status label
             self.stimulus_status_label.config(text="Stimulus: {}   {} of {}".format(stimulus_name, trial_num+1, len(stim_order)))
+            # Send Stimulus Name to OpenEphys
+            self.openephys.send_command('stim ' + stimulus_file)
+            # Tell RPi to run trial
             self.rpi.start_trial(pi_stimulus_path, trial_num)
             print('ITI: {} seconds'.format(iti))
             time.sleep(iti)
@@ -519,6 +527,8 @@ class AcuteExperimentControl:
             print('Search Trial: {} Stimulus: {}'.format(trial_num, stimulus_file))
             # set stimulus status label
             self.stimulus_status_label.config(text="Stimulus: {}".format(stimulus_name))
+            # Send Stimulus Name to OpenEphys
+            self.openephys.send_command('stim ' + stimulus_file)
             self.rpi.start_trial(pi_stimulus_path, trial_num)
             print('ITI: {} seconds'.format(iti))
             time.sleep(iti)
@@ -531,6 +541,24 @@ class AcuteExperimentControl:
     def load_stimuli(self, path):
         wavfs = glob.glob(os.path.join(path, '*.wav'))
         self.stimuli = wavfs
+    
+    def add_sines_to_stimuli(self):
+        if self.stimuli:
+            self.sined_stim_names = []
+            for stim in self.stimuli:
+                fs, stim_dat = wavfile.read(stim)
+                nsamps = len(stim_dat)
+                t = np.arange(nsamps)
+                sine_dat = (16384*np.sin(2*np.pi*(1000./fs)*t)).astype('int16')
+                output_fname = stim + '.sine'
+                output_data = np.zeros((nsamps, 2))
+                output_data[:, 0] = sine_dat
+                output_data[:, 1] = stim_dat
+                wavfile.write(output_fname, fs, output_data.astype('int16')) 
+                self.sined_stim_names.append(output_fname)
+                print(stim_dat.dtype, sine_dat.dtype, output_data.dtype)
+            self.unsined_stims = self.stimuli
+            self.stimuli = self.sined_stim_names 
 
     def compute_block_length(self):
 

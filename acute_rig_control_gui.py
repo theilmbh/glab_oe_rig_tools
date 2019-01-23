@@ -570,10 +570,10 @@ class AcuteExperimentControl:
                 f.close()
             durs = np.array(durs)*self.n_repeats
             stimdur = np.sum(durs)
-            min_dur = stimdur + self.n_repeats*self.inter_trial_min
-            max_dur = stimdur + self.n_repeats*self.inter_trial_max
+            min_dur = stimdur + self.n_repeats*self.inter_trial_min*len(durs)
+            max_dur = stimdur + self.n_repeats*self.inter_trial_max*len(durs)
             if self.inter_trial_type == 'fixed':
-                min_dur = stimdur + self.n_repeats*self.inter_trial_fixed
+                min_dur = stimdur + self.n_repeats*self.inter_trial_fixed*len(durs)
                 max_dur = min_dur
         return (min_dur, max_dur)
                

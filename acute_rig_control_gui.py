@@ -209,7 +209,7 @@ class AcuteExperimentControl:
     def __init__(self):
         self.master_window = Tk()
         self.master_window.title('Gentnerlab Acute Rig Control')
-        self.bird = 'B999'
+        self.bird = 'default'
         
         # Probe information
         self.AP = 0
@@ -590,16 +590,13 @@ class AcuteExperimentControl:
         pass
 
     def setup_session(self):
+        
         self.sessionID = datetime.datetime.now().strftime('%Y%m%d') + '-' +socket.gethostname()
         self.session_path=os.path.join(self.experiment_path_entry.get(), self.sessionID)
         self.bird_path = os.path.join(self.session_path, self.bird)
-        #self.stimuli_path = os.path.join(self.bird_path, 'stimuli')
         self.blocks_path = os.path.join(self.bird_path, 'blocks')
-        #os.makedirs(self.stimuli_path, exist_ok=True)
         os.makedirs(self.blocks_path, exist_ok=True)
 
-        #self.stimulus_path_entry.delete(0, END)
-        #self.stimulus_path_entry.insert(0, self.stimuli_path)
         self.session_entry.delete(0, END)
         self.session_entry.insert(0, self.sessionID)
 

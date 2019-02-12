@@ -206,8 +206,8 @@ class RigStateMachineConnection:
 
 class AcuteExperimentControl:
 
-    def __init__(self):
-        self.master_window = Tk()
+    def __init__(self, master):
+        self.master_window = master
         self.master_window.title('Gentnerlab Acute Rig Control')
         self.bird = 'default'
         
@@ -239,31 +239,32 @@ class AcuteExperimentControl:
 
     def setup_gui(self):
         # Bird / Probe / Location
-        self.p_label    = Label(self.master_window, text="Physical Parameters")
-        self.bird_label = Label(self.master_window, text="Bird")
-        self.probe_label = Label(self.master_window, text="Probe")
-        self.ap_label = Label(self.master_window, text="AP (um)")
-        self.ml_label = Label(self.master_window, text="ML (um)")
-        self.z_label = Label(self.master_window, text="Z (um)")
+        self.phys_params_frame = LabelFrame(self.master_window, text="Physical Parameters", padx=5)
+        self.bird_label = Label(self.phys_params_frame, text="Bird")
+        self.probe_label = Label(self.phys_params_frame, text="Probe")
+        self.ap_label = Label(self.phys_params_frame, text="AP (um)")
+        self.ml_label = Label(self.phys_params_frame, text="ML (um)")
+        self.z_label = Label(self.phys_params_frame, text="Z (um)")
 
-        self.bird_entry = Entry(self.master_window,width=8, justify='right')
-        self.probe_entry = Entry(self.master_window, width=8, justify='right')
-        self.ap_entry = Entry(self.master_window, width=8, justify='right')
-        self.ml_entry = Entry(self.master_window, width=8, justify='right')
-        self.z_entry = Entry(self.master_window, width=8, justify='right')
+        self.bird_entry = Entry(self.phys_params_frame,width=8, justify='right')
+        self.probe_entry = Entry(self.phys_params_frame, width=8, justify='right')
+        self.ap_entry = Entry(self.phys_params_frame, width=8, justify='right')
+        self.ml_entry = Entry(self.phys_params_frame, width=8, justify='right')
+        self.z_entry = Entry(self.phys_params_frame, width=8, justify='right')
 
-        self.p_label.grid(row=0, column=0, columnspan=2) 
-        self.bird_label.grid(row=1, column=0)
-        self.probe_label.grid(row=2, column=0)
-        self.ap_label.grid(row=3, column=0)
-        self.ml_label.grid(row=4, column=0)
-        self.z_label.grid(row=5, column=0)
+        self.bird_label.grid(row=0, column=0)
+        self.probe_label.grid(row=1, column=0)
+        self.ap_label.grid(row=2, column=0)
+        self.ml_label.grid(row=3, column=0)
+        self.z_label.grid(row=4, column=0)
 
-        self.bird_entry.grid(row=1, column=1)
-        self.probe_entry.grid(row=2, column=1)
-        self.ap_entry.grid(row=3, column=1)
-        self.ml_entry.grid(row=4, column=1)
-        self.z_entry.grid(row=5, column=1)
+        self.bird_entry.grid(row=0, column=1, sticky=W+E)
+        self.probe_entry.grid(row=1, column=1)
+        self.ap_entry.grid(row=2, column=1)
+        self.ml_entry.grid(row=3, column=1)
+        self.z_entry.grid(row=4, column=1)
+
+        self.phys_params_frame.grid(row=0, column=0, rowspan=2, columnspan=4, padx=5, pady=5, sticky=W+E+N+S)
 
         self.bird_entry.insert(0, self.bird)
         self.probe_entry.insert(0, str(self.probe))
@@ -273,47 +274,51 @@ class AcuteExperimentControl:
         
 
         # Block Control
-        self.block_label = Label(self.master_window, text="Block Parameters")
-        self.iti_label = Label(self.master_window, text="ITI Type", justify='center')
+        self.block_labelframe = LabelFrame(self.master_window, text="Block Parameters", padx=5)
+        self.iti_label = Label(self.block_labelframe, text="ITI Type", justify='center')
+        self.block_type_label = Label(self.block_labelframe, text="Block Type", justify="center")
         self.itv = StringVar()
         self.itv.set("random")
-        self.random_iti_button = Radiobutton(self.master_window, text="Random", variable=self.itv, value="random", command=self.set_random_iti)
-        self.fixed_iti_button = Radiobutton(self.master_window, text="Fixed", variable=self.itv, value="fixed", command=self.set_fixed_iti)
+        self.random_iti_button = Radiobutton(self.block_labelframe, text="Random", variable=self.itv, value="random", command=self.set_random_iti)
+        self.fixed_iti_button = Radiobutton(self.block_labelframe, text="Fixed", variable=self.itv, value="fixed", command=self.set_fixed_iti)
         self.sob = StringVar()
         self.sob.set("block")
-        self.search_button = Radiobutton(self.master_window, text="Search", variable=self.sob, value="search", command=self.set_search)
-        self.block_button = Radiobutton(self.master_window, text="Block", variable=self.sob, value="block", command=self.set_block)
+        self.search_button = Radiobutton(self.block_labelframe, text="Search", variable=self.sob, value="search", command=self.set_search)
+        self.block_button = Radiobutton(self.block_labelframe, text="Block", variable=self.sob, value="block", command=self.set_block)
 
-        self.iti_range_label = Label(self.master_window, text="ITI Min (s)")
-        self.iti_range_min_entry = Entry(self.master_window, width=4, justify='right')
-        self.iti_range_label_max = Label(self.master_window, text="ITI Max (s)")
-        self.iti_range_max_entry = Entry(self.master_window, width=4, justify='right')
+        self.iti_range_label = Label(self.block_labelframe, text="ITI Min (s)")
+        self.iti_range_min_entry = Entry(self.block_labelframe, width=4, justify='right')
+        self.iti_range_label_max = Label(self.block_labelframe, text="ITI Max (s)")
+        self.iti_range_max_entry = Entry(self.block_labelframe, width=4, justify='right')
         
-        self.n_repeats_label = Label(self.master_window, text='Repeats')
-        self.n_repeats_entry = Entry(self.master_window, width=4, justify='right')
+        self.n_repeats_label = Label(self.block_labelframe, text='Repeats')
+        self.n_repeats_entry = Entry(self.block_labelframe, width=4, justify='right')
+        self.repeat_stimulus_button = Button(self.block_labelframe, text='Repeat Stimulus', command=self.flip_repeat_stimulus)
 
-        self.block_label.grid(row=6, column=0, columnspan=3)
-        self.iti_label.grid(row=7, column=0 )
-        self.random_iti_button.grid(row=7, column=1, sticky='W')
-        self.fixed_iti_button.grid(row=8, column=1, sticky='W') 
+        self.iti_label.grid(row=0, column=0, columnspan=2)
+        self.random_iti_button.grid(row=1, column=0) 
+        self.fixed_iti_button.grid(row=1, column=1)
+        self.block_type_label.grid(row=2, column=0, columnspan=2)
+        self.search_button.grid(row=3, column=0)
+        self.block_button.grid(row=3, column=1)
+        self.iti_range_label.grid(row=4, column=0)
+        self.iti_range_min_entry.grid(row=4, column=1)
+        self.iti_range_label_max.grid(row=5, column=0)
+        self.iti_range_max_entry.grid(row=5, column=1)
+        
+        self.n_repeats_label.grid(row=6, column=0)
+        self.n_repeats_entry.grid(row=6, column=1)
+        self.repeat_stimulus_button.grid(row=7, column=0, columnspan=2)
 
-        self.iti_range_label.grid(row=9, column=0)
-        self.iti_range_min_entry.grid(row=9, column=1, sticky='E')
-        self.iti_range_label_max.grid(row=10, column=0)
-        self.iti_range_max_entry.grid(row=10, column=1, sticky='E')
-
-        self.n_repeats_label.grid(row=11, column=0)
-        self.n_repeats_entry.grid(row=11, column=1, sticky='E')
-        self.search_button.grid(row=12, column=0)
-        self.block_button.grid(row=12, column=1)
+        self.block_labelframe.grid(row=2, column=0, rowspan=3,columnspan=4, padx=5, sticky=W+E+N+S)
 
         self.n_repeats_entry.insert(0, str(self.n_repeats))
         self.iti_range_min_entry.insert(0, str(self.inter_trial_min))
         self.iti_range_max_entry.insert(0, str(self.inter_trial_max))
+        
 
         # Stimulus Path
-        self.paths_frame = Frame(self.master_window, bd=2)
-        Label(self.paths_frame, text="Path Parameters").grid(row=0, column=4, columnspan=4)
+        self.paths_frame = LabelFrame(self.master_window, bd=2, text="Path Parameters")
         self.load_stimulus_button = Button(self.paths_frame, text='Load Stimuli', command=self.load_stimuli)
         self.experiment_path_label = Label(self.paths_frame, text='Experiment Dir')
         self.experiment_path_entry = Entry(self.paths_frame)
@@ -322,49 +327,49 @@ class AcuteExperimentControl:
         self.session_label = Label(self.paths_frame, text='Session ID')
         self.session_entry = Entry(self.paths_frame)
 
-        self.stimulus_path_label.grid(row=2, column=4)
-        self.stimulus_path_entry.grid(row=2, column=5, padx=5, columnspan=3)
-        self.experiment_path_label.grid(row=1, column=4)
-        self.experiment_path_entry.grid(row=1, column=5, padx=5, columnspan=3)
-        self.session_label.grid(row=3, column=4)
-        self.session_entry.grid(row=3, column=5, padx=5, columnspan=3)
+        self.stimulus_path_label.grid(row=1, column=0)
+        self.stimulus_path_entry.grid(row=1, column=1, padx=5)
+        self.experiment_path_label.grid(row=0, column=0)
+        self.experiment_path_entry.grid(row=0, column=1, padx=5)
+        self.session_label.grid(row=2, column=0)
+        self.session_entry.grid(row=2, column=1, padx=5)
 
         self.stimulus_path_entry.insert(0, os.path.expanduser('~/stimuli'))
         self.experiment_path_entry.insert(0, os.path.expanduser('~/experiments/'))
 
-        self.paths_frame.grid(row=0, column=4, rowspan=4, columnspan=4)
+        self.paths_frame.grid(row=2, column=4,  rowspan=1, columnspan=4, sticky=W+E+N+S, padx=5)
 
         # Block Start/Stop
-        self.stop_button = Button(self.master_window, text='Stop', command=self.stop_button_cmd)
-        self.start_button = Button(self.master_window, text='Start', command=self.start_button_cmd)
-        self.repeat_stimulus_button = Button(self.master_window, text='Repeat Stimulus', command=self.flip_repeat_stimulus)
-        self.stop_button.grid(row= 13, column=6, sticky='E')
-        self.start_button.grid(row=13, column=7, sticky='E', padx=5)
-        self.repeat_stimulus_button.grid(row=13, column=0, columnspan=2)
+        self.control_button_frame = Frame(self.master_window)
+        self.stop_button = Button(self.control_button_frame, text='Stop', command=self.stop_button_cmd)
+        self.start_button = Button(self.control_button_frame, text='Start', command=self.start_button_cmd)
+        self.stop_button.grid(row=0, column=1, sticky='E')
+        self.start_button.grid(row=0, column=2, sticky='E', padx=5)
+        Button(self.control_button_frame, text='Setup Session', command=self.setup_session).grid(row=0, column=0)
+        self.control_button_frame.grid(row=4, column=4, columnspan=4, sticky=S)
 
         # Block Status
-        self.block_status_frame = Frame(self.master_window, bd=2, relief='ridge')
-        Label(self.block_status_frame, text="Block Status").grid(row=2, column=4, columnspan=4)
+        self.block_status_frame = LabelFrame(self.master_window, bd=2, relief='ridge', text="Block Status")
         self.block_min_label = Label(self.block_status_frame, text="Block Min: %.1f (s)" % 0)
         self.block_max_label = Label(self.block_status_frame, text = "Block Max: %.1f (s)" % 0)
         self.stimulus_status_label = Label(self.block_status_frame, text='No Stimuli')
-        self.stimulus_status_label.grid(row=4, column=4, columnspan = 4, sticky='W')
-        self.block_min_label.grid(row=3, column=4, columnspan=1)
-        self.block_max_label.grid(row=3, column=6, columnspan=1)
+        self.stimulus_status_label.grid(row=1, column=0, columnspan = 4, sticky='W')
+        self.block_min_label.grid(row=0, column=0, columnspan=1)
+        self.block_max_label.grid(row=0, column=1, columnspan=1)
 
-        self.block_status_frame.grid(row=4, column=4, columnspan=4, rowspan=4, padx=5)
+        self.block_status_frame.grid(row=3, column=4, columnspan=4, rowspan=1, padx=5, pady=5, sticky=N+S+E+W)
 
         # Logo
         image = Image.open("glab.png").resize(size=(256, 64), resample=Image.BICUBIC)
         self.logo = ImageTk.PhotoImage(image)
         self.logo_label = Label(image=self.logo)
-        self.logo_label.grid(row=8, column=4, columnspan=4, rowspan=4)
+        self.logo_label.grid(row=0, column=4, columnspan=4, rowspan=2, pady=15, padx=10, sticky=N+S)
 
         # Author
         #Label(self.master_window, text="Brad Theilman").grid(row=11, column=4 )
 
         # Setup Session button
-        Button(text='Setup Session', command=self.setup_session).grid(row=13, column=4)
+
 
     def start_button_cmd(self):
         self.lock_params()
@@ -613,5 +618,6 @@ class AcuteExperimentControl:
         self.master_window.mainloop()
 
 if __name__ == '__main__':
-    app = AcuteExperimentControl()
+    root = Tk()
+    app = AcuteExperimentControl(root)
     app.run()

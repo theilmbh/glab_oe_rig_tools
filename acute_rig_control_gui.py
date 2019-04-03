@@ -4,6 +4,7 @@ import os
 import threading
 import sys
 import socket
+from time import sleep
 import zmq
 import time
 import logging
@@ -15,6 +16,7 @@ import scipy.io.wavfile as wavfile
 from PIL import Image, ImageTk
 from paramiko import SSHClient
 from scp import SCPClient
+from serial_commander import conex_interface as sc
 
 #################################
 ## ACUTE RIG CONTROL GUI!      ##
@@ -204,6 +206,86 @@ class RigStateMachineConnection:
         print('Sending: {}'.format(cmd))
         self.send_command(cmd)
 
+class CONEXControl:
+    def __init__(self, acuterig):
+        os.system("xset r off") # Turn off keyboard repeat
+        self.master = acuterig.conex_window
+        self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.zcoord = 0
+        self.homepos = 0
+        self.posString = StringVar()
+        self.posString.set(str(self.zcoord))
+        self.initialize_window()
+        self.con = sc.SerialCommander() # Our connection to the drive
+        self.con.reference()
+        self.initial_drive_position = self.con.getCurrPosition()
+
+    def on_closing(self):
+        os.system("xset r on")
+        self.con.close()
+        self.master.destroy()
+
+    def initialize_window(self):
+
+       self.master.title(string="CONEX Control")
+       self.master.bind("<Key>", self.process_key)
+       self.master.aspect(1, 1, 1, 1)
+       self.buttonframe = Frame(self.master, bd=2)
+       self.down5 = Button(self.buttonframe, text="Down 5um",command=lambda : self.move_stage(5))
+       self.down25 = Button(self.buttonframe, text="Down 25um",command=lambda : self.move_stage(25))
+       self.down50 = Button(self.buttonframe, text="Down 50um",command=lambda : self.move_stage(50))
+       self.up25 = Button(self.buttonframe, text="Up 25um",command=lambda : self.move_stage(-25))
+       self.up50 = Button(self.buttonframe, text="Up 50um",command=lambda : self.move_stage(-50))
+       self.up100 = Button(self.buttonframe, text="Up 100um",command=lambda : self.move_stage(-100))
+
+       self.gohome = Button(self.buttonframe, text="Go Home", command=self.rethome)
+
+       self.up25.grid(row=0, column=0)
+       self.up50.grid(row=0, column=1)
+       self.up100.grid(row=0, column=2)
+       self.gohome.grid(row=1, column=1)
+       self.down5.grid(row=2, column=0)
+       self.down25.grid(row=2, column=1)
+       self.down50.grid(row=2, column=2)
+
+       self.buttonframe.grid(row=0, column=0, columnspan=3, rowspan=3)
+
+       self.posdisplay = Frame(self.master, bd=2)
+
+       self.positionlabel = Label(self.posdisplay, text="Current Z Position (um)", anchor=CENTER)
+       self.positionentry = Entry(self.posdisplay, text = self.posString, bg="black", fg="#00ff33", font=(20), justify="center")
+       self.positionlabel.pack()
+       self.positionentry.pack()
+
+       self.posdisplay.grid(row=3, column=0, columnspan=3, rowspan=2, sticky=N+S)
+
+        
+    def move_stage(self, dist, event=None):
+        self.con.moveStage(dist)
+        sleep(0.0025*abs(dist)+0.1)
+        self.send_motion_event(dist)
+        self.update_position_display()
+
+    def update_position_display(self):
+        pos = self.con.getCurrPosition()
+        self.zcoord = pos - self.initial_drive_position
+        self.posString.set(str("{:.1f}".format(self.zcoord)))
+
+    def send_motion_event(self, dist):
+        pass
+
+    def rethome(self):
+        self.con.goHome(self.initial_drive_position)
+        sleep(0.1 + 0.0005*abs(self.zcoord - self.initial_drive_position)) 
+        self.update_position_display()
+    
+    def process_key(self, event):
+        keybindings = {'KP_7': -25, 'KP_8': -50, 'KP_9': -100, 'KP_1': 5, 'KP_2': 25, 'KP_3': 50}
+        if event.keysym == 'KP_5':
+            self.rethome()
+        elif event.keysym in keybindings.keys():
+            self.move_stage(keybindings[event.keysym])
+
 class AcuteExperimentControl:
 
     def __init__(self, master):
@@ -346,6 +428,7 @@ class AcuteExperimentControl:
         self.stop_button.grid(row=0, column=1, sticky='E')
         self.start_button.grid(row=0, column=2, sticky='E', padx=5)
         Button(self.control_button_frame, text='Setup Session', command=self.setup_session).grid(row=0, column=0)
+        Button(self.control_button_frame, text='Open Conex Control', command=self.open_conex).grid(row=1, column=0)
         self.control_button_frame.grid(row=4, column=4, columnspan=4, sticky=S)
 
         # Block Status
@@ -370,6 +453,9 @@ class AcuteExperimentControl:
 
         # Setup Session button
 
+    def open_conex(self):
+        self.conex_window = Toplevel(self.master_window)
+        self.conex_app = CONEXControl(self)
 
     def start_button_cmd(self):
         self.lock_params()

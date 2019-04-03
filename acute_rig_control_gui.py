@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from tkinter import *
+from tkinter import messagebox
 import os
 import threading
 import sys
@@ -213,6 +214,7 @@ class CONEXControl:
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.zcoord = 0
         self.homepos = 0
+        self.disabled = False
         self.posString = StringVar()
         self.posString.set(str(self.zcoord))
         self.initialize_window()
@@ -220,6 +222,9 @@ class CONEXControl:
         self.con.reference()
         self.initial_drive_position = self.con.getCurrPosition()
 
+    def setZero(self):
+        self.initial_drive_position = self.con.getCurrPosition()
+    
     def on_closing(self):
         os.system("xset r on")
         self.con.close()
@@ -237,13 +242,16 @@ class CONEXControl:
        self.up25 = Button(self.buttonframe, text="Up 25um",command=lambda : self.move_stage(-25))
        self.up50 = Button(self.buttonframe, text="Up 50um",command=lambda : self.move_stage(-50))
        self.up100 = Button(self.buttonframe, text="Up 100um",command=lambda : self.move_stage(-100))
-
+       self.disableB = Button(self.buttonframe, text="Disable", command=self.disable)
        self.gohome = Button(self.buttonframe, text="Go Home", command=self.rethome)
+       self.resetHomeB = Button(self.buttonframe, text="Reset Home", command=self.resetHomeValue)
 
        self.up25.grid(row=0, column=0)
        self.up50.grid(row=0, column=1)
        self.up100.grid(row=0, column=2)
        self.gohome.grid(row=1, column=1)
+       self.disableB.grid(row=1, column=0)
+       self.resetHomeB.grid(row=1, column=2)
        self.down5.grid(row=2, column=0)
        self.down25.grid(row=2, column=1)
        self.down50.grid(row=2, column=2)
@@ -274,15 +282,37 @@ class CONEXControl:
     def send_motion_event(self, dist):
         pass
 
+    def resetHomeValue(self):
+        result = messagebox.askyesno("reset home value", "Really reset home value?", icon='warning')
+        if result == True:
+            self.initial_drive_position = self.con.getCurrPosition()
+            self.update_position_display()
+
     def rethome(self):
-        self.con.goHome(self.initial_drive_position)
-        sleep(0.1 + 0.0005*abs(self.zcoord - self.initial_drive_position)) 
-        self.update_position_display()
-    
+        result = messagebox.askyesno("go home", "Are You Sure?", icon='warning')
+        if result == True:
+            self.con.goHome(self.initial_drive_position)
+            sleep(0.1 + 0.0005*abs(self.zcoord - self.initial_drive_position))
+            self.update_position_display()
+
+    def disable(self):
+        if self.disabled == True:
+            self.con.enable()
+            self.disabled = False
+        elif self.disabled == False:
+            self.con.disable()
+            self.disabled = True
+
     def process_key(self, event):
-        keybindings = {'KP_7': -25, 'KP_8': -50, 'KP_9': -100, 'KP_1': 5, 'KP_2': 25, 'KP_3': 50}
+        keybindings = {'KP_7': 25, 'KP_8': 50, 'KP_9': 100, 'KP_1': -5, 'KP_2': -25, 'KP_3': -50} #each keypad key korresponds to a distance to move the stage
         if event.keysym == 'KP_5':
             self.rethome()
+
+        elif event.keysym == 'KP_4': #disable
+            self.disable()
+
+        elif event.keysym == 'KP_Decimal':
+            self.con.stopMotion()
         elif event.keysym in keybindings.keys():
             self.move_stage(keybindings[event.keysym])
 
